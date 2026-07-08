@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>단어 승부</title>
+<link href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Gowun+Dodum&display=swap" rel="stylesheet" />
+<style>
+  /* ============ 디자인 토큰 (단어 텔레파시와 동일 계열) ============ */
+  :root {
+    --bg: #EFEBF9;
+    --ink: #251C46;
+    --muted: #8B84A6;
+    --me: #FF5C7A;
+    --them: #1FA3B8;
+    --sync: #6C3EE8;
+    --card: #FFFFFF;
+    --radius: 18px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Gowun Dodum', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    justify-content: center;
+  }
+  .app {
+    width: 100%;
+    max-width: 480px;
+    min-height: 100vh;
+    padding: 28px 20px 40px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  h1 {
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 40px;
+    text-align: center;
+    letter-spacing: 1px;
+  }
+  .tagline { text-align: center; color: var(--muted); margin-top: 6px; font-size: 15px; margin-bottom: 22px; }
+
+  .screen { display: none; flex: 1; flex-direction: column; }
+  .screen.active { display: flex; }
+
+  button {
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 20px;
+    letter-spacing: 1px;
+    border: none;
+    border-radius: var(--radius);
+    padding: 15px 20px;
+    background: var(--ink);
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  button:active { transform: scale(0.97); }
+  button.ghost { background: transparent; color: var(--muted); font-size: 16px; }
+  button.accent { background: var(--sync); }
+  button:focus-visible, input:focus-visible { outline: 3px solid var(--sync); outline-offset: 2px; }
+  button:disabled { background: var(--muted); cursor: default; }
+
+  input[type="text"] {
+    font-family: 'Gowun Dodum', sans-serif;
+    font-size: 18px;
+    width: 100%;
+    padding: 15px 18px;
+    border: 2px solid #D8D2EC;
+    border-radius: var(--radius);
+    background: var(--card);
+    color: var(--ink);
+  }
+  input[type="text"]:focus { border-color: var(--sync); outline: none; }
+
+  /* ============ 홈 화면 ============ */
+  #screen-home .rules {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 20px;
+    font-size: 14.5px;
+    line-height: 1.8;
+  }
+  #screen-home .rules b.me { color: var(--me); }
+  #screen-home .rules b.them { color: var(--them); }
+  #screen-home .rules b.sync { color: var(--sync); }
+
+  .option-group { margin-bottom: 14px; }
+  .option-group .label { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .toggle-row { display: flex; gap: 8px; }
+  .toggle-btn {
+    flex: 1;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 15px;
+    padding: 11px 8px;
+    border-radius: 12px;
+    border: 2px solid #D8D2EC;
+    background: var(--card);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .toggle-btn.selected { border-color: var(--sync); color: var(--sync); background: #F1ECFC; }
+  .diff-desc { font-size: 13px; color: var(--muted); margin-top: 8px; line-height: 1.6; min-height: 36px; }
+
+  .home-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+  .join-row { display: flex; gap: 10px; }
+  .join-row input { text-transform: uppercase; letter-spacing: 3px; }
+  .join-row button { white-space: nowrap; background: var(--them); }
+  .home-error { color: var(--me); font-size: 14px; text-align: center; min-height: 20px; margin-top: 8px; }
+
+  /* ============ 대기/방 화면 ============ */
+  #screen-wait, #screen-room { align-items: center; justify-content: center; gap: 18px; text-align: center; }
+  .dots span {
+    display: inline-block;
+    width: 10px; height: 10px;
+    margin: 0 4px;
+    border-radius: 50%;
+    background: var(--sync);
+    animation: blink 1.2s infinite;
+  }
+  .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%,100% { opacity: 0.2; } 50% { opacity: 1; } }
+
+  .room-code {
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 60px;
+    letter-spacing: 14px;
+    padding-left: 14px;
+    color: var(--sync);
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 16px 20px 16px 34px;
+    user-select: all;
+  }
+  .room-hint { color: var(--muted); font-size: 15px; }
+  .room-config { color: var(--muted); font-size: 13px; }
+
+  /* ============ 게임 화면 ============ */
+  .score-head {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .score-side { flex: 1; text-align: center; }
+  .score-side .name { font-size: 13px; color: var(--muted); margin-bottom: 2px; }
+  .score-side .name b.me { color: var(--me); }
+  .score-side .name b.them { color: var(--them); }
+  .score-side .points { font-family: 'Do Hyeon', sans-serif; font-size: 34px; }
+  .score-side.me .points { color: var(--me); }
+  .score-side.them .points { color: var(--them); }
+  .score-vs { font-family: 'Do Hyeon', sans-serif; color: var(--muted); font-size: 18px; }
+  .dealer-badge {
+    display: inline-block;
+    font-size: 11px;
+    background: var(--sync);
+    color: #fff;
+    border-radius: 8px;
+    padding: 1px 7px;
+    margin-top: 4px;
+  }
+  .pip-row { display: flex; justify-content: center; gap: 5px; margin-top: 6px; }
+  .pip {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #DDD6F0;
+    transition: background 0.2s, transform 0.2s;
+  }
+  .pip.filled.me { background: var(--me); transform: scale(1.1); }
+  .pip.filled.them { background: var(--them); transform: scale(1.1); }
+
+  .game-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 10px;
+  }
+  .round-label { font-family: 'Do Hyeon', sans-serif; font-size: 22px; }
+  .leave-btn {
+    font-family: 'Gowun Dodum', sans-serif;
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid #D8D2EC;
+  }
+
+  .timer-track {
+    height: 8px;
+    border-radius: 4px;
+    background: #DDD6F0;
+    overflow: hidden;
+    margin-bottom: 18px;
+  }
+  .timer-fill {
+    height: 100%;
+    width: 100%;
+    background: var(--sync);
+    border-radius: 4px;
+    transition: width 0.1s linear;
+  }
+
+  .phase-msg {
+    text-align: center;
+    font-size: 16px;
+    min-height: 24px;
+    margin-bottom: 14px;
+  }
+
+  /* ============ 글자 선택 그리드 ============ */
+  .letter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .letter-btn {
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 18px;
+    padding: 12px 0;
+    border-radius: 10px;
+    border: 2px solid #D8D2EC;
+    background: var(--card);
+    color: var(--ink);
+  }
+  .letter-btn:active { transform: scale(0.94); }
+  .letter-btn.picked { border-color: var(--sync); background: var(--sync); color: #fff; }
+  .letter-btn:disabled { opacity: 0.45; }
+
+  /* ============ 글자 공개 ============ */
+  .reveal-tiles {
+    display: none;
+    justify-content: center;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 16px;
+  }
+  .reveal-tiles.show { display: flex; }
+  .letter-tile {
+    width: 76px; height: 76px;
+    border-radius: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 34px;
+    color: #fff;
+    animation: pop-in 0.4s ease-out both;
+  }
+  .letter-tile.mine { background: var(--me); }
+  .letter-tile.theirs { background: var(--them); }
+  .tile-plus { font-family: 'Do Hyeon', sans-serif; color: var(--muted); font-size: 20px; }
+  @keyframes pop-in { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  .order-hint { text-align: center; font-size: 13.5px; color: var(--sync); margin-bottom: 12px; min-height: 18px; }
+
+  .word-form { display: none; gap: 10px; margin-bottom: 8px; }
+  .word-form.show { display: flex; }
+  .word-form button { white-space: nowrap; background: var(--sync); }
+
+  .round-banner {
+    display: none;
+    text-align: center;
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 18px;
+    margin-bottom: 12px;
+    animation: pop-in 0.35s ease-out both;
+  }
+  .round-banner.show { display: block; }
+  .round-banner .title { font-family: 'Do Hyeon', sans-serif; font-size: 20px; margin-bottom: 4px; }
+  .round-banner .title.win { color: var(--sync); }
+  .round-banner .title.lose { color: var(--muted); }
+  .round-banner .title.draw { color: var(--muted); }
+  .round-banner .word { font-size: 15px; color: var(--muted); }
+
+  .history {
+    margin-top: 4px;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+  .history-row {
+    font-size: 13.5px;
+    color: var(--muted);
+    background: var(--card);
+    border-radius: 10px;
+    padding: 7px 12px;
+    margin-bottom: 6px;
+  }
+  .history-row b.me { color: var(--me); font-weight: normal; }
+  .history-row b.them { color: var(--them); font-weight: normal; }
+
+  /* ============ 결과 화면 ============ */
+  #screen-result { align-items: center; justify-content: center; gap: 14px; text-align: center; }
+  .result-title {
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 40px;
+    color: var(--sync);
+  }
+  .result-sub { color: var(--muted); font-size: 16px; }
+  .vote-box { display: none; flex-direction: column; gap: 10px; margin-top: 16px; min-width: 240px; }
+  .vote-box.show { display: flex; }
+  .vote-status { font-size: 14px; color: var(--muted); min-height: 20px; }
+  .end-box { display: none; flex-direction: column; gap: 10px; margin-top: 16px; min-width: 240px; }
+  .end-box.show { display: flex; }
+
+  .app-footer { text-align: center; padding-top: 18px; }
+  .app-footer a { font-size: 12px; color: var(--muted); text-decoration: none; }
+  .app-footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <h1>단어 승부</h1>
+  <p class="tagline">같은 두 글자를 먼저 엮어내는 사람이 승리</p>
+
+  <!-- ========== 홈 ========== -->
+  <section class="screen active" id="screen-home">
+    <div class="rules">
+      각 라운드, <b class="me">나</b>와 <b class="them">상대</b>가 글자를 하나씩 골라요.<br />
+      공개된 <b class="sync">두 글자가 모두 들어간 단어</b>를 먼저 말하면 그 라운드 승리!<br />
+      MEDIUM · HARD는 그 라운드의 <b class="sync">선</b> 플레이어 글자가 단어에 먼저 나와야 해요.<br />
+      이긴 사람이 다음 라운드의 선이 되고, <b class="sync">3점을 먼저 따면</b> 최종 승리예요.
+    </div>
+
+    <div class="option-group">
+      <div class="label">난도</div>
+      <div class="toggle-row" id="diff-toggle">
+        <button type="button" class="toggle-btn selected" data-value="easy">EASY</button>
+        <button type="button" class="toggle-btn" data-value="medium">MEDIUM</button>
+        <button type="button" class="toggle-btn" data-value="hard">HARD</button>
+      </div>
+      <p class="diff-desc" id="diff-desc"></p>
+    </div>
+
+    <div class="home-actions">
+      <input type="text" id="nickname" placeholder="닉네임 (최대 12자)" maxlength="12" autocomplete="off" />
+      <button id="btn-random">랜덤 매칭 (난도 랜덤)</button>
+      <button id="btn-create" class="accent">방 만들기 (난도 직접 선택)</button>
+      <div class="join-row">
+        <input type="text" id="join-code" placeholder="초대 코드" maxlength="4" autocomplete="off" />
+        <button id="btn-join">참가</button>
+      </div>
+    </div>
+    <p class="home-error" id="home-error"></p>
+  </section>
+
+  <!-- ========== 랜덤 매칭 대기 ========== -->
+  <section class="screen" id="screen-wait">
+    <div class="dots"><span></span><span></span><span></span></div>
+    <p>상대를 찾는 중이에요</p>
+    <button class="ghost" id="btn-cancel-wait">취소하고 메인으로</button>
+  </section>
+
+  <!-- ========== 방 대기 (초대 코드) ========== -->
+  <section class="screen" id="screen-room">
+    <p class="room-hint">상대에게 이 코드를 알려주세요</p>
+    <div class="room-code" id="room-code">····</div>
+    <p class="room-config" id="room-config"></p>
+    <p class="room-hint">상대가 참가하면 게임이 바로 시작돼요</p>
+    <div class="dots"><span></span><span></span><span></span></div>
+    <button class="ghost" id="btn-cancel-room">취소하고 메인으로</button>
+  </section>
+
+  <!-- ========== 게임 ========== -->
+  <section class="screen" id="screen-game">
+    <div class="score-head">
+      <div class="score-side me">
+        <div class="name"><b class="me" id="my-name">나</b></div>
+        <div class="points" id="my-score">0</div>
+        <div class="pip-row" id="my-pips"></div>
+        <div class="dealer-badge" id="my-dealer-badge" style="visibility:hidden;">선</div>
+      </div>
+      <div class="score-vs">:</div>
+      <div class="score-side them">
+        <div class="name"><b class="them" id="opp-name">상대</b></div>
+        <div class="points" id="opp-score">0</div>
+        <div class="pip-row" id="opp-pips"></div>
+        <div class="dealer-badge" id="opp-dealer-badge" style="visibility:hidden;">선</div>
+      </div>
+    </div>
+
+    <div class="game-head">
+      <span class="round-label" id="round-label">ROUND 1</span>
+      <button class="leave-btn" id="btn-leave">나가기</button>
+    </div>
+    <div class="timer-track"><div class="timer-fill" id="timer-fill"></div></div>
+    <p class="phase-msg" id="phase-msg"></p>
+
+    <div class="letter-grid" id="letter-grid"></div>
+
+    <div class="reveal-tiles" id="reveal-tiles">
+      <div class="letter-tile mine" id="tile-mine"></div>
+      <span class="tile-plus">+</span>
+      <div class="letter-tile theirs" id="tile-theirs"></div>
+    </div>
+    <p class="order-hint" id="order-hint"></p>
+
+    <form class="word-form" id="word-form">
+      <input type="text" id="word-input" placeholder="단어를 입력하세요" maxlength="20" autocomplete="off" />
+      <button type="submit" id="word-btn">제출</button>
+    </form>
+
+    <div class="round-banner" id="round-banner">
+      <div class="title" id="banner-title"></div>
+      <div class="word" id="banner-word"></div>
+    </div>
+
+    <div class="history" id="history"></div>
+  </section>
+
+  <!-- ========== 결과 ========== -->
+  <section class="screen" id="screen-result">
+    <p class="result-sub" id="result-sub"></p>
+    <p class="result-title" id="result-title"></p>
+    <p class="result-sub" id="result-detail"></p>
+
+    <div class="vote-box" id="vote-box">
+      <button class="accent" id="btn-vote-yes">같은 상대와 재대결</button>
+      <button class="ghost" id="btn-vote-no">그만하고 메인으로</button>
+      <p class="vote-status" id="vote-status"></p>
+    </div>
+
+    <div class="end-box" id="end-box">
+      <button class="ghost" id="btn-home">메인으로</button>
+    </div>
+  </section>
+
+  <footer class="app-footer">
+    <a href="/privacy.html">개인정보처리방침</a>
+  </footer>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+  const $ = (id) => document.getElementById(id);
+  const screens = ['screen-home', 'screen-wait', 'screen-room', 'screen-game', 'screen-result'];
+  const WINS_NEEDED = 3;
+  function showScreen(id) {
+    screens.forEach((s) => $(s).classList.toggle('active', s === id));
+  }
+
+  let myNickname = '';
+  let currentOpponent = '';
+  let timerInterval = null;
+  let selectedDiff = 'easy';
+
+  // ---------- 닉네임 기억하기 ----------
+  $('nickname').value = localStorage.getItem('nickname') || '';
+  function getNickname() {
+    myNickname = $('nickname').value.trim() || '익명';
+    localStorage.setItem('nickname', myNickname);
+    return myNickname;
+  }
+
+  // ---------- 난도 토글 ----------
+  function setupToggle(containerId, onSelect) {
+    const container = $(containerId);
+    container.querySelectorAll('.toggle-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        container.querySelectorAll('.toggle-btn').forEach((b) => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        onSelect(btn.dataset.value);
+      });
+    });
+  }
+  setupToggle('diff-toggle', (v) => { selectedDiff = v; renderDiffDesc(); });
+
+  const DIFF_LABEL = { easy: 'EASY', medium: 'MEDIUM', hard: 'HARD' };
+  const DIFF_DESC = {
+    easy: '시간 제한 없이, 두 글자가 순서 상관없이 포함되기만 하면 승리예요. 편하게 즐기는 모드.',
+    medium: '15초 안에 완성해야 해요. 그 라운드 "선" 플레이어 글자가 단어에 먼저 나와야 해요.',
+    hard: '10초 안에 5글자 이상 단어를 완성해야 해요. 순서 규칙은 MEDIUM과 동일해요.',
+  };
+  function renderDiffDesc() {
+    $('diff-desc').textContent = DIFF_DESC[selectedDiff];
+  }
+  renderDiffDesc();
+
+  // ---------- 스코어 점 그래프 ----------
+  function renderPips(containerId, score, colorClass) {
+    const el = $(containerId);
+    el.innerHTML = '';
+    for (let i = 0; i < WINS_NEEDED; i += 1) {
+      const pip = document.createElement('span');
+      pip.className = 'pip' + (i < score ? ` filled ${colorClass}` : '');
+      el.appendChild(pip);
+    }
+  }
+
+  // ---------- 타이머 바 ----------
+  function runTimer(totalMs) {
+    clearInterval(timerInterval);
+    const fill = $('timer-fill');
+    if (totalMs === null || totalMs === undefined) {
+      // 시간 제한 없음: 바를 가득 채운 채 고정
+      fill.style.transition = 'none';
+      fill.style.width = '100%';
+      return;
+    }
+    fill.style.transition = '';
+    const start = Date.now();
+    fill.style.width = '100%';
+    timerInterval = setInterval(() => {
+      const remain = Math.max(0, totalMs - (Date.now() - start));
+      fill.style.width = (remain / totalMs) * 100 + '%';
+      if (remain <= 0) clearInterval(timerInterval);
+    }, 100);
+  }
+
+  // ---------- 홈: 랜덤 매칭 / 방 만들기 / 참가 ----------
+  $('btn-random').addEventListener('click', () => {
+    socket.emit('join_queue', getNickname());
+  });
+  $('btn-create').addEventListener('click', () => {
+    socket.emit('create_room', { nickname: getNickname(), difficulty: selectedDiff });
+  });
+  $('btn-join').addEventListener('click', () => {
+    const code = $('join-code').value.trim().toUpperCase();
+    if (code.length !== 4) {
+      $('home-error').textContent = '초대 코드 4자리를 입력해주세요.';
+      return;
+    }
+    socket.emit('join_room', { nickname: getNickname(), code });
+  });
+  $('join-code').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') $('btn-join').click();
+  });
+
+  socket.on('room_created', ({ code, difficulty }) => {
+    $('home-error').textContent = '';
+    $('room-code').textContent = code;
+    $('room-config').textContent = DIFF_LABEL[difficulty];
+    showScreen('screen-room');
+  });
+  socket.on('room_error', ({ message }) => {
+    $('home-error').textContent = message;
+    showScreen('screen-home');
+  });
+  socket.on('waiting', () => {
+    $('home-error').textContent = '';
+    showScreen('screen-wait');
+  });
+
+  function goHome() {
+    clearInterval(timerInterval);
+    showScreen('screen-home');
+  }
+  $('btn-cancel-room').addEventListener('click', () => { socket.emit('cancel_waiting'); goHome(); });
+  $('btn-cancel-wait').addEventListener('click', () => { socket.emit('cancel_waiting'); goHome(); });
+
+  // ---------- 매치 시작 ----------
+  socket.on('match_start', ({ opponent, difficulty, dealerIsMe }) => {
+    currentOpponent = opponent;
+    $('my-name').textContent = myNickname;
+    $('opp-name').textContent = currentOpponent;
+    $('my-score').textContent = '0';
+    $('opp-score').textContent = '0';
+    renderPips('my-pips', 0, 'me');
+    renderPips('opp-pips', 0, 'them');
+    $('history').innerHTML = '';
+    setDealerBadge(dealerIsMe);
+    $('phase-msg').textContent = `${opponent}님과 매칭됐어요! (${DIFF_LABEL[difficulty]}) 곧 시작합니다.`;
+    $('word-form').classList.remove('show');
+    $('reveal-tiles').classList.remove('show');
+    $('round-banner').classList.remove('show');
+    $('letter-grid').innerHTML = '';
+    $('order-hint').textContent = '';
+    showScreen('screen-game');
+  });
+
+  function setDealerBadge(dealerIsMe) {
+    $('my-dealer-badge').style.visibility = dealerIsMe ? 'visible' : 'hidden';
+    $('opp-dealer-badge').style.visibility = dealerIsMe ? 'hidden' : 'visible';
+  }
+
+  // ---------- 글자 선택 단계 ----------
+  socket.on('letter_phase_start', ({ round, time, dealerIsMe, pool }) => {
+    $('round-label').textContent = 'ROUND ' + round;
+    $('round-banner').classList.remove('show');
+    $('reveal-tiles').classList.remove('show');
+    $('word-form').classList.remove('show');
+    $('order-hint').textContent = '';
+    setDealerBadge(dealerIsMe);
+
+    $('phase-msg').textContent = '글자를 하나 골라주세요!';
+
+    const grid = $('letter-grid');
+    grid.innerHTML = '';
+    grid.style.display = 'grid';
+    pool.forEach((letter) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'letter-btn';
+      btn.textContent = letter;
+      btn.addEventListener('click', () => {
+        if (btn.disabled) return;
+        grid.querySelectorAll('.letter-btn').forEach((b) => { b.disabled = true; });
+        btn.classList.add('picked');
+        socket.emit('submit_letter', letter);
+        $('phase-msg').textContent = '선택 완료! 상대를 기다리는 중…';
+      });
+      grid.appendChild(btn);
+    });
+
+    runTimer(time);
+  });
+
+  socket.on('opponent_letter_submitted', () => {
+    const grid = $('letter-grid');
+    const anyEnabled = Array.from(grid.querySelectorAll('.letter-btn')).some((b) => !b.disabled);
+    if (anyEnabled) {
+      $('phase-msg').textContent = '상대는 이미 골랐어요. 서두르세요!';
+    }
+  });
+
+  // ---------- 공개 + 단어 레이스 단계 ----------
+  socket.on('round_reveal', ({ round, mine, theirs, dealerIsMe, orderMatters, minLength, time }) => {
+    $('letter-grid').style.display = 'none';
+    $('letter-grid').innerHTML = '';
+
+    $('tile-mine').textContent = mine;
+    $('tile-theirs').textContent = theirs;
+    $('reveal-tiles').classList.add('show');
+
+    if (mine === theirs) {
+      $('order-hint').textContent = `"${mine}" 글자가 단어에 두 번 들어가야 해요.`;
+    } else if (orderMatters) {
+      const dealerLetter = dealerIsMe ? mine : theirs;
+      const otherLetter = dealerIsMe ? theirs : mine;
+      $('order-hint').textContent = `"${dealerLetter}" 글자가 "${otherLetter}" 글자보다 먼저 나와야 해요. (선: ${dealerIsMe ? '나' : '상대'})`;
+    } else if (minLength > 1) {
+      $('order-hint').textContent = `두 글자를 포함한 ${minLength}글자 이상 단어를 입력하세요.`;
+    } else {
+      $('order-hint').textContent = '두 글자를 모두 포함한 단어를 입력하세요.';
+    }
+
+    $('phase-msg').textContent = time === null
+      ? '시간 제한 없어요! 먼저 완성하는 사람이 승리.'
+      : '먼저 단어를 완성하는 사람이 승리!';
+    $('word-form').classList.add('show');
+    $('word-input').value = '';
+    $('word-input').disabled = false;
+    $('word-btn').disabled = false;
+    $('word-input').focus();
+    runTimer(time);
+  });
+
+  $('word-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const word = $('word-input').value.trim();
+    if (!word) return;
+    socket.emit('submit_word', word);
+  });
+
+  socket.on('word_rejected', ({ message }) => {
+    $('phase-msg').textContent = message;
+    $('word-input').disabled = false;
+    $('word-btn').disabled = false;
+    $('word-input').focus();
+    $('word-input').select();
+  });
+
+  // ---------- 라운드 결과 ----------
+  socket.on('round_result', ({ round, draw, iWon, word, myScore, oppScore, dealerIsMeNext, myLetter, oppLetter }) => {
+    clearInterval(timerInterval);
+    $('word-form').classList.remove('show');
+    $('reveal-tiles').classList.remove('show');
+    $('my-score').textContent = myScore;
+    $('opp-score').textContent = oppScore;
+    renderPips('my-pips', myScore, 'me');
+    renderPips('opp-pips', oppScore, 'them');
+
+    const banner = $('round-banner');
+    const title = $('banner-title');
+    const wordEl = $('banner-word');
+    if (draw) {
+      title.className = 'title draw';
+      title.textContent = '무승부 — 아무도 완성하지 못했어요';
+      wordEl.textContent = '';
+    } else if (iWon) {
+      title.className = 'title win';
+      title.textContent = `내가 승리! "${word}"`;
+      wordEl.textContent = `${myNickname}님이 완성`;
+    } else {
+      title.className = 'title lose';
+      title.textContent = `상대 승리 — "${word}"`;
+      wordEl.textContent = `${currentOpponent}님이 완성`;
+    }
+    banner.classList.add('show');
+
+    const line = document.createElement('div');
+    line.className = 'history-row';
+    line.innerHTML = `R${round} — <b class="me">${escapeHtml(myLetter)}</b> + <b class="them">${escapeHtml(oppLetter)}</b> → ${draw ? '무승부' : escapeHtml(word)}`;
+    $('history').prepend(line);
+
+    setDealerBadge(dealerIsMeNext);
+    $('phase-msg').textContent = draw ? '다음 라운드를 준비할게요…' : '다음 라운드를 준비할게요…';
+  });
+
+  // ---------- 매치 종료 ----------
+  socket.on('match_end', ({ iWon, myScore, oppScore }) => {
+    $('result-sub').textContent = '최종 스코어';
+    $('result-title').textContent = iWon ? '나의 승리!' : `${currentOpponent}님의 승리`;
+    $('result-detail').textContent = `${myScore} : ${oppScore}`;
+    $('vote-box').classList.add('show');
+    $('end-box').classList.remove('show');
+    $('vote-status').textContent = '';
+    $('btn-vote-yes').disabled = false;
+    showScreen('screen-result');
+  });
+
+  $('btn-vote-yes').addEventListener('click', () => {
+    socket.emit('vote_rematch', true);
+    $('btn-vote-yes').disabled = true;
+    $('vote-status').textContent = '상대의 응답을 기다리는 중…';
+  });
+  $('btn-vote-no').addEventListener('click', () => {
+    socket.emit('vote_rematch', false);
+    goHome();
+  });
+  socket.on('opponent_voted_rematch', ({ agree }) => {
+    if (agree) $('vote-status').textContent = '상대가 재대결을 원해요!';
+  });
+  socket.on('rematch_result', ({ continue: cont, reason }) => {
+    if (cont) {
+      $('phase-msg').textContent = `${currentOpponent}님과 재대결! 곧 시작합니다.`;
+      $('my-score').textContent = '0';
+      $('opp-score').textContent = '0';
+      renderPips('my-pips', 0, 'me');
+      renderPips('opp-pips', 0, 'them');
+      $('history').innerHTML = '';
+      $('round-banner').classList.remove('show');
+      showScreen('screen-game');
+    } else {
+      $('vote-box').classList.remove('show');
+      $('end-box').classList.add('show');
+      $('result-sub').textContent = '';
+      if (reason === 'timeout') {
+        $('result-title').textContent = '시간 초과';
+        $('result-detail').textContent = '응답이 없어 게임이 종료됐어요.';
+      } else {
+        $('result-title').textContent = '여기까지!';
+        $('result-detail').textContent = '상대가 게임을 마쳤어요. 즐거우셨나요?';
+      }
+    }
+  });
+
+  // ---------- 나가기 ----------
+  $('btn-leave').addEventListener('click', () => {
+    if (confirm('정말 나갈까요? 지금 게임은 종료돼요.')) {
+      socket.emit('leave_game');
+      goHome();
+    }
+  });
+  socket.on('opponent_left', () => {
+    clearInterval(timerInterval);
+    $('result-sub').textContent = '';
+    $('result-title').textContent = '상대가 나갔어요';
+    $('result-detail').textContent = '메인으로 돌아가서 다시 시작해보세요.';
+    $('vote-box').classList.remove('show');
+    $('end-box').classList.add('show');
+    showScreen('screen-result');
+  });
+
+  $('btn-home').addEventListener('click', goHome);
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+</script>
+</body>
+</html>

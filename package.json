@@ -1,0 +1,22 @@
+{
+  "name": "word-duel",
+  "version": "1.0.0",
+  "description": "커플 대결 글자 게임 - 각자 고른 글자가 공개되면, 그 글자들을 포함한 단어를 먼저 말하는 사람이 승리",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "dictionary-en": "^4.0.0",
+    "express": "^5.2.1",
+    "nspell": "^2.1.5",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}
