@@ -42,6 +42,28 @@ npm start
 TIME_SCALE=0.3 npm start
 ```
 
+## 온라인 배포 (Render 무료 플랜)
+
+이미 GitHub 저장소(`meinhyung/word-create`)와 연결되어 있다면 아래만 하면 된다.
+
+1. https://render.com 접속 → GitHub 계정으로 로그인
+2. 대시보드에서 **New → Web Service** 클릭
+3. `word-create` 저장소 선택
+4. 설정 확인 (자동 입력됨): Build Command `npm install`, Start Command `npm start`, Instance Type **Free**
+5. **Deploy Web Service** 클릭
+
+몇 분 후 `https://word-create-xxxx.onrender.com` 같은 주소가 생긴다.
+
+무료 플랜은 15분간 접속이 없으면 서버가 잠들고, 다음 접속 시 깨어나는 데 30초~1분 걸린다.
+
+### 코드 수정 후 재배포
+
+```bash
+git add .
+git commit -m "수정 내용"
+git push
+```
+
 ## 구조
 
 | 파일 | 역할 |
