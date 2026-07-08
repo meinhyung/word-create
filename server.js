@@ -49,13 +49,15 @@ function letterStats(word, letter) {
   const target = letter.toLowerCase();
   let count = 0;
   let firstPos = Infinity;
+  let lastPos = -Infinity;
   for (let i = 0; i < lower.length; i += 1) {
     if (lower[i] === target) {
       count += 1;
       if (firstPos === Infinity) firstPos = i;
+      lastPos = i;
     }
   }
-  return { count, firstPos };
+  return { count, firstPos, lastPos };
 }
 
 // ---------- 영어 사전 (nspell + dictionary-en, ESM이라 동적 import로 로드) ----------
@@ -66,6 +68,52 @@ async function loadEnglishSpellChecker() {
   spellEn = nspell(dictEn);
   console.log('영어 사전 로드 완료');
 }
+
+// ---------- 국가 이름 (일반 영어 사전엔 고유명사라 빠져있어서 별도로 인정) ----------
+const COUNTRY_NAMES = new Set([
+  'afghanistan', 'albania', 'algeria', 'andorra', 'angola', 'antigua and barbuda',
+  'argentina', 'armenia', 'australia', 'austria', 'azerbaijan',
+  'bahamas', 'bahrain', 'bangladesh', 'barbados', 'belarus', 'belgium', 'belize',
+  'benin', 'bhutan', 'bolivia', 'bosnia and herzegovina', 'botswana', 'brazil',
+  'britain', 'brunei', 'bulgaria', 'burkina faso', 'burundi',
+  'cambodia', 'cameroon', 'canada', 'chad', 'chile', 'china', 'colombia',
+  'comoros', 'congo', 'costa rica', 'croatia', 'cuba', 'cyprus', 'czechia', 'czech republic',
+  'denmark', 'djibouti', 'dominica', 'dominican republic',
+  'ecuador', 'egypt', 'england', 'el salvador', 'eritrea', 'estonia', 'eswatini', 'ethiopia',
+  'fiji', 'finland', 'france',
+  'gabon', 'gambia', 'georgia', 'germany', 'ghana', 'greece', 'grenada', 'guatemala',
+  'guinea', 'guyana',
+  'haiti', 'holland', 'honduras', 'hungary',
+  'iceland', 'india', 'indonesia', 'iran', 'iraq', 'ireland', 'israel', 'italy',
+  'jamaica', 'japan', 'jordan',
+  'kazakhstan', 'kenya', 'kiribati', 'korea', 'kosovo', 'kuwait', 'kyrgyzstan',
+  'laos', 'latvia', 'lebanon', 'lesotho', 'liberia', 'libya', 'liechtenstein',
+  'lithuania', 'luxembourg',
+  'madagascar', 'malawi', 'malaysia', 'maldives', 'mali', 'malta', 'mauritania',
+  'mauritius', 'mexico', 'moldova', 'monaco', 'mongolia', 'montenegro', 'morocco',
+  'mozambique', 'myanmar',
+  'namibia', 'nauru', 'nepal', 'netherlands', 'nicaragua', 'niger', 'nigeria',
+  'norway',
+  'oman',
+  'pakistan', 'palau', 'palestine', 'panama', 'paraguay', 'peru', 'philippines',
+  'poland', 'portugal',
+  'qatar',
+  'romania', 'russia', 'rwanda',
+  'samoa', 'senegal', 'serbia', 'seychelles', 'singapore', 'slovakia', 'slovenia',
+  'somalia', 'spain', 'sudan', 'suriname', 'sweden', 'switzerland', 'syria',
+  'taiwan', 'tajikistan', 'tanzania', 'thailand', 'togo', 'tonga', 'tunisia',
+  'turkey', 'turkmenistan', 'tuvalu',
+  'uganda', 'ukraine', 'uruguay', 'uzbekistan',
+  'vanuatu', 'vatican', 'venezuela', 'vietnam',
+  'wales',
+  'yemen',
+  'zambia', 'zimbabwe',
+  'united states', 'america', 'united kingdom', 'united arab emirates',
+  'north korea', 'south korea', 'north macedonia', 'macedonia',
+  'papua new guinea', 'marshall islands', 'solomon islands', 'sri lanka',
+  'saudi arabia', 'sierra leone', 'south africa', 'south sudan',
+  'trinidad and tobago', 'new zealand', 'ivory coast',
+]);
 
 // ---------- 단어 검증 ----------
 function validateWord(game, socketId, rawWord) {
@@ -96,12 +144,14 @@ function validateWord(game, socketId, rawWord) {
   }
 
   if (cfg.orderMatters && !sameLetter) {
-    if (!(dStats.firstPos < oStats.firstPos)) {
+    // 선 글자가 후 글자보다 앞서는 조합이 하나라도 있으면 인정 (첫 등장끼리만 비교하지 않음)
+    if (!(dStats.firstPos < oStats.lastPos)) {
       return { ok: false, reason: `"${dealerLetter}" 글자가 "${otherLetter}" 글자보다 먼저 나와야 해요.` };
     }
   }
 
-  if (!spellEn || !spellEn.correct(word.toLowerCase())) {
+  const isCountryName = COUNTRY_NAMES.has(word.toLowerCase());
+  if (!isCountryName && (!spellEn || !spellEn.correct(word.toLowerCase()))) {
     return { ok: false, reason: '사전에 없는 단어예요.' };
   }
 
@@ -226,6 +276,21 @@ io.on('connection', (socket) => {
     finishRound(game, { winnerId: socket.id, word: result.word });
   });
 
+  // ---------- 라운드 패스 투표 (주로 시간 제한이 없는 EASY에서 사용, 둘 다 눌러야 성립) ----------
+  socket.on('pass_round', () => {
+    const game = games.get(socket.data.roomId);
+    if (!game || game.phase !== 'word') return;
+    if (game.passVotes[socket.id]) return; // 이미 패스함
+
+    game.passVotes[socket.id] = true;
+    socket.to(game.roomId).emit('opponent_passed');
+
+    const [p1, p2] = game.players;
+    if (game.passVotes[p1.id] && game.passVotes[p2.id]) {
+      finishRound(game, { draw: true });
+    }
+  });
+
   // ---------- 재대결 투표 ----------
   socket.on('vote_rematch', (agree) => {
     const game = games.get(socket.data.roomId);
@@ -287,6 +352,7 @@ function startMatch(p1, p2, config) {
     dealerId: Math.random() < 0.5 ? p1.id : p2.id,
     phase: 'idle',
     letters: {},
+    passVotes: {},
     history: [],
     rematchVotes: {},
     timer: null,
@@ -344,6 +410,7 @@ function endLetterPhase(game) {
   });
 
   game.phase = 'word';
+  game.passVotes = {};
   const cfg = DIFFICULTY[game.difficulty];
   const time = cfg.wordTime === null ? null : scaled(cfg.wordTime);
 
@@ -401,7 +468,8 @@ function finishRound(game, { winnerId, word, draw }) {
   }));
 
   if (!draw && game.score[winnerId] >= WINS_NEEDED) {
-    matchEnd(game, winnerId);
+    // 승리 단어를 잠시 보여준 뒤에 매치 종료 화면으로 넘어가도록 동일한 딜레이를 둠
+    game.timer = setTimeout(() => matchEnd(game, winnerId), scaled(ROUND_END_PAUSE));
   } else {
     game.timer = setTimeout(() => startRound(game), scaled(ROUND_END_PAUSE));
   }

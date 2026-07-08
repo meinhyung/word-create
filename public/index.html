@@ -113,6 +113,70 @@
   .join-row button { white-space: nowrap; background: var(--them); }
   .home-error { color: var(--me); font-size: 14px; text-align: center; min-height: 20px; margin-top: 8px; }
 
+  /* ============ 최근 게임 (홈) ============ */
+  .recent { margin-top: 26px; font-size: 14px; }
+  .recent h2 {
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 17px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    font-weight: normal;
+  }
+  .recent-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--card);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    border: none;
+    width: 100%;
+    text-align: left;
+    font-family: 'Gowun Dodum', sans-serif;
+    color: var(--ink);
+  }
+  .recent-item:active { transform: scale(0.98); }
+  .recent-item .result { font-family: 'Do Hyeon', sans-serif; font-size: 15px; }
+  .recent-item .result.win { color: var(--sync); }
+  .recent-item .result.lose { color: var(--muted); }
+  .recent-item .meta { color: var(--muted); font-size: 13px; }
+  .recent-empty { color: var(--muted); }
+
+  /* ============ 게임 기보 ============ */
+  #screen-kifu { gap: 4px; }
+  .kifu-title { font-family: 'Do Hyeon', sans-serif; font-size: 24px; margin: 14px 0 4px; }
+  .kifu-sub { color: var(--muted); font-size: 14px; margin-bottom: 18px; }
+  .kifu-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+  .kifu-row {
+    background: var(--card);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .kifu-round { font-family: 'Do Hyeon', sans-serif; font-size: 14px; color: var(--muted); width: 32px; flex-shrink: 0; }
+  .kifu-letters { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .kifu-letter {
+    width: 30px; height: 30px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Do Hyeon', sans-serif;
+    font-size: 15px;
+    color: #fff;
+  }
+  .kifu-letter.me { background: var(--me); }
+  .kifu-letter.them { background: var(--them); }
+  .kifu-plus { color: var(--muted); font-size: 13px; }
+  .kifu-word { flex: 1; font-family: 'Do Hyeon', sans-serif; font-size: 17px; }
+  .kifu-word.draw { color: var(--muted); font-size: 14px; font-family: 'Gowun Dodum', sans-serif; }
+  .kifu-badge { font-size: 11px; border-radius: 8px; padding: 2px 8px; white-space: nowrap; }
+  .kifu-badge.me { background: var(--me); color: #fff; }
+  .kifu-badge.them { background: var(--them); color: #fff; }
+  .kifu-badge.draw { background: #DDD6F0; color: var(--muted); }
+
   /* ============ 대기/방 화면 ============ */
   #screen-wait, #screen-room { align-items: center; justify-content: center; gap: 18px; text-align: center; }
   .dots span {
@@ -260,7 +324,7 @@
   }
   .letter-tile.mine { background: var(--me); }
   .letter-tile.theirs { background: var(--them); }
-  .tile-plus { font-family: 'Do Hyeon', sans-serif; color: var(--muted); font-size: 20px; }
+  .tile-plus { font-family: 'Do Hyeon', sans-serif; color: var(--muted); font-size: 20px; order: 2; }
   @keyframes pop-in { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
   .order-hint { text-align: center; font-size: 13.5px; color: var(--sync); margin-bottom: 12px; min-height: 18px; }
@@ -268,6 +332,9 @@
   .word-form { display: none; gap: 10px; margin-bottom: 8px; }
   .word-form.show { display: flex; }
   .word-form button { white-space: nowrap; background: var(--sync); }
+
+  .pass-btn { display: none; width: 100%; font-size: 14px; padding: 10px; margin-bottom: 8px; }
+  .pass-btn.show { display: block; }
 
   .round-banner {
     display: none;
@@ -355,6 +422,19 @@
       </div>
     </div>
     <p class="home-error" id="home-error"></p>
+
+    <div class="recent">
+      <h2>최근 게임</h2>
+      <div id="recent-list"></div>
+    </div>
+  </section>
+
+  <!-- ========== 게임 기보 ========== -->
+  <section class="screen" id="screen-kifu">
+    <button class="ghost" id="btn-kifu-back">← 메인으로</button>
+    <h2 class="kifu-title" id="kifu-title"></h2>
+    <p class="kifu-sub" id="kifu-sub"></p>
+    <div class="kifu-list" id="kifu-list"></div>
   </section>
 
   <!-- ========== 랜덤 매칭 대기 ========== -->
@@ -412,6 +492,7 @@
       <input type="text" id="word-input" placeholder="단어를 입력하세요" maxlength="20" autocomplete="off" />
       <button type="submit" id="word-btn">제출</button>
     </form>
+    <button type="button" class="ghost pass-btn" id="btn-pass">이 라운드 패스</button>
 
     <div class="round-banner" id="round-banner">
       <div class="title" id="banner-title"></div>
@@ -448,7 +529,7 @@
 <script>
   const socket = io();
   const $ = (id) => document.getElementById(id);
-  const screens = ['screen-home', 'screen-wait', 'screen-room', 'screen-game', 'screen-result'];
+  const screens = ['screen-home', 'screen-wait', 'screen-room', 'screen-game', 'screen-result', 'screen-kifu'];
   const WINS_NEEDED = 3;
   function showScreen(id) {
     screens.forEach((s) => $(s).classList.toggle('active', s === id));
@@ -456,8 +537,11 @@
 
   let myNickname = '';
   let currentOpponent = '';
+  let currentDifficulty = 'easy';
+  let currentMatchRounds = [];
   let timerInterval = null;
   let selectedDiff = 'easy';
+  const DIFF_LABEL = { easy: 'EASY', medium: 'MEDIUM', hard: 'HARD' };
 
   // ---------- 닉네임 기억하기 ----------
   $('nickname').value = localStorage.getItem('nickname') || '';
@@ -466,6 +550,72 @@
     localStorage.setItem('nickname', myNickname);
     return myNickname;
   }
+
+  // ---------- 게임 기록 (최근 10게임, 브라우저에 저장) ----------
+  function loadMatchHistory() {
+    try { return JSON.parse(localStorage.getItem('matchHistory')) || []; }
+    catch { return []; }
+  }
+  function saveMatchRecord(record) {
+    const list = loadMatchHistory();
+    list.unshift(record);
+    localStorage.setItem('matchHistory', JSON.stringify(list.slice(0, 10)));
+  }
+  function renderRecentMatches() {
+    const list = loadMatchHistory();
+    const box = $('recent-list');
+    if (list.length === 0) {
+      box.innerHTML = '<p class="recent-empty">아직 기록이 없어요. 첫 대결을 시작해보세요!</p>';
+      return;
+    }
+    box.innerHTML = '';
+    list.forEach((record, index) => {
+      const d = new Date(record.at);
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'recent-item';
+      item.innerHTML =
+        `<span>
+          <span class="result ${record.iWon ? 'win' : 'lose'}">${record.iWon ? '승리' : '패배'}</span>
+          <span class="meta"> · ${escapeHtml(record.opponent)}님과 ${record.myScore}:${record.oppScore}</span>
+        </span>
+        <span class="meta">${DIFF_LABEL[record.difficulty] || ''} · ${d.getMonth() + 1}/${d.getDate()}</span>`;
+      item.addEventListener('click', () => showKifu(record));
+      box.appendChild(item);
+    });
+  }
+  renderRecentMatches();
+
+  // ---------- 게임 기보 (라운드별 승리 단어 보기) ----------
+  function showKifu(record) {
+    $('kifu-title').textContent = `${record.opponent}님과의 대결`;
+    $('kifu-sub').textContent =
+      `${record.iWon ? '내가 승리' : `${record.opponent}님 승리`} · ${record.myScore}:${record.oppScore} · ${DIFF_LABEL[record.difficulty] || ''}`;
+
+    const list = $('kifu-list');
+    list.innerHTML = '';
+    record.rounds.forEach((r) => {
+      const row = document.createElement('div');
+      row.className = 'kifu-row';
+      const badgeClass = r.winner === 'draw' ? 'draw' : r.winner;
+      const badgeText = r.winner === 'draw' ? '무승부' : (r.winner === 'me' ? '내가 승' : '상대 승');
+      const wordHtml = r.winner === 'draw'
+        ? '<span class="kifu-word draw">아무도 완성 못함</span>'
+        : `<span class="kifu-word">${escapeHtml(r.word)}</span>`;
+      row.innerHTML =
+        `<span class="kifu-round">R${r.round}</span>
+        <span class="kifu-letters">
+          <span class="kifu-letter me">${escapeHtml(r.myLetter)}</span>
+          <span class="kifu-plus">+</span>
+          <span class="kifu-letter them">${escapeHtml(r.oppLetter)}</span>
+        </span>
+        ${wordHtml}
+        <span class="kifu-badge ${badgeClass}">${badgeText}</span>`;
+      list.appendChild(row);
+    });
+    showScreen('screen-kifu');
+  }
+  $('btn-kifu-back').addEventListener('click', goHome);
 
   // ---------- 난도 토글 ----------
   function setupToggle(containerId, onSelect) {
@@ -480,7 +630,6 @@
   }
   setupToggle('diff-toggle', (v) => { selectedDiff = v; renderDiffDesc(); });
 
-  const DIFF_LABEL = { easy: 'EASY', medium: 'MEDIUM', hard: 'HARD' };
   const DIFF_DESC = {
     easy: '시간 제한 없이, 두 글자가 순서 상관없이 포함되기만 하면 승리예요. 편하게 즐기는 모드.',
     medium: '15초 안에 완성해야 해요. 그 라운드 "선" 플레이어 글자가 단어에 먼저 나와야 해요.',
@@ -558,6 +707,7 @@
 
   function goHome() {
     clearInterval(timerInterval);
+    renderRecentMatches();
     showScreen('screen-home');
   }
   $('btn-cancel-room').addEventListener('click', () => { socket.emit('cancel_waiting'); goHome(); });
@@ -566,6 +716,8 @@
   // ---------- 매치 시작 ----------
   socket.on('match_start', ({ opponent, difficulty, dealerIsMe }) => {
     currentOpponent = opponent;
+    currentDifficulty = difficulty;
+    currentMatchRounds = [];
     $('my-name').textContent = myNickname;
     $('opp-name').textContent = currentOpponent;
     $('my-score').textContent = '0';
@@ -576,6 +728,7 @@
     setDealerBadge(dealerIsMe);
     $('phase-msg').textContent = `${opponent}님과 매칭됐어요! (${DIFF_LABEL[difficulty]}) 곧 시작합니다.`;
     $('word-form').classList.remove('show');
+    $('btn-pass').classList.remove('show');
     $('reveal-tiles').classList.remove('show');
     $('round-banner').classList.remove('show');
     $('letter-grid').innerHTML = '';
@@ -594,6 +747,7 @@
     $('round-banner').classList.remove('show');
     $('reveal-tiles').classList.remove('show');
     $('word-form').classList.remove('show');
+    $('btn-pass').classList.remove('show');
     $('order-hint').textContent = '';
     setDealerBadge(dealerIsMe);
 
@@ -637,6 +791,15 @@
     $('tile-theirs').textContent = theirs;
     $('reveal-tiles').classList.add('show');
 
+    // 순서가 중요한 난도(MEDIUM/HARD)에서는 선(先) 플레이어 글자가 항상 왼쪽에 오도록 배치
+    if (orderMatters && mine !== theirs && !dealerIsMe) {
+      $('tile-mine').style.order = '3';
+      $('tile-theirs').style.order = '1';
+    } else {
+      $('tile-mine').style.order = '1';
+      $('tile-theirs').style.order = '3';
+    }
+
     if (mine === theirs) {
       $('order-hint').textContent = `"${mine}" 글자가 단어에 두 번 들어가야 해요.`;
     } else if (orderMatters) {
@@ -657,7 +820,23 @@
     $('word-input').disabled = false;
     $('word-btn').disabled = false;
     $('word-input').focus();
+    $('btn-pass').classList.toggle('show', time === null);
+    $('btn-pass').disabled = false;
+    $('btn-pass').textContent = '이 라운드 패스';
     runTimer(time);
+  });
+
+  $('btn-pass').addEventListener('click', () => {
+    socket.emit('pass_round');
+    $('btn-pass').disabled = true;
+    $('btn-pass').textContent = '패스 요청함 · 상대 응답 대기 중';
+    $('phase-msg').textContent = '패스를 요청했어요. 상대도 패스하면 다음 라운드로 넘어가요.';
+  });
+
+  socket.on('opponent_passed', () => {
+    if (!$('btn-pass').disabled) {
+      $('phase-msg').textContent = '상대가 이 라운드를 패스하고 싶어해요! 같이 패스하려면 아래 버튼을 눌러주세요.';
+    }
   });
 
   $('word-form').addEventListener('submit', (e) => {
@@ -679,6 +858,7 @@
   socket.on('round_result', ({ round, draw, iWon, word, myScore, oppScore, dealerIsMeNext, myLetter, oppLetter }) => {
     clearInterval(timerInterval);
     $('word-form').classList.remove('show');
+    $('btn-pass').classList.remove('show');
     $('reveal-tiles').classList.remove('show');
     $('my-score').textContent = myScore;
     $('opp-score').textContent = oppScore;
@@ -708,12 +888,30 @@
     line.innerHTML = `R${round} — <b class="me">${escapeHtml(myLetter)}</b> + <b class="them">${escapeHtml(oppLetter)}</b> → ${draw ? '무승부' : escapeHtml(word)}`;
     $('history').prepend(line);
 
+    currentMatchRounds.push({
+      round,
+      myLetter,
+      oppLetter,
+      winner: draw ? 'draw' : (iWon ? 'me' : 'opp'),
+      word: draw ? null : word,
+    });
+
     setDealerBadge(dealerIsMeNext);
     $('phase-msg').textContent = draw ? '다음 라운드를 준비할게요…' : '다음 라운드를 준비할게요…';
   });
 
   // ---------- 매치 종료 ----------
   socket.on('match_end', ({ iWon, myScore, oppScore }) => {
+    saveMatchRecord({
+      opponent: currentOpponent,
+      difficulty: currentDifficulty,
+      myScore,
+      oppScore,
+      iWon,
+      at: Date.now(),
+      rounds: currentMatchRounds,
+    });
+
     $('result-sub').textContent = '최종 스코어';
     $('result-title').textContent = iWon ? '나의 승리!' : `${currentOpponent}님의 승리`;
     $('result-detail').textContent = `${myScore} : ${oppScore}`;
@@ -738,6 +936,7 @@
   });
   socket.on('rematch_result', ({ continue: cont, reason }) => {
     if (cont) {
+      currentMatchRounds = [];
       $('phase-msg').textContent = `${currentOpponent}님과 재대결! 곧 시작합니다.`;
       $('my-score').textContent = '0';
       $('opp-score').textContent = '0';
