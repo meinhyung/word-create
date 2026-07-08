@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://word-create.onrender.com/sitemap.xml
