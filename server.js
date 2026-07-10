@@ -4,9 +4,11 @@
 //  - 글자 선택(easy/medium 5초, hard 7초) -> 공개 -> 단어 레이스(난도별 제한시간)
 //  - 3선, 이긴 사람이 다음 라운드 선(先)이 됨
 // ============================================================
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const { Server } = require('socket.io');
 
 const app = express();
@@ -14,6 +16,40 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 app.use(express.static(path.join(__dirname, 'public')));
+
+// ---------- 단어 제안함 (관리자만 확인 가능, 파일로 저장) ----------
+const SUGGESTIONS_FILE = path.join(__dirname, 'suggestions.json');
+let suggestions = [];
+try {
+  suggestions = JSON.parse(fs.readFileSync(SUGGESTIONS_FILE, 'utf8'));
+} catch {
+  suggestions = [];
+}
+function saveSuggestions() {
+  fs.writeFile(SUGGESTIONS_FILE, JSON.stringify(suggestions, null, 2), () => {});
+}
+
+function escapeHtmlServer(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+app.get('/admin/suggestions', (req, res) => {
+  if (!process.env.ADMIN_KEY || req.query.key !== process.env.ADMIN_KEY) {
+    res.status(404).send('Not found');
+    return;
+  }
+  const rows = suggestions
+    .slice()
+    .reverse()
+    .map((s) => `<tr><td>${new Date(s.at).toLocaleString('ko-KR')}</td><td>${escapeHtmlServer(s.word)}</td><td>${escapeHtmlServer(s.nickname)}</td></tr>`)
+    .join('');
+  res.send(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>단어 제안함</title>
+    <style>body{font-family:sans-serif;padding:24px;} table{border-collapse:collapse;width:100%;} td,th{border:1px solid #ddd;padding:8px;text-align:left;} th{background:#f4f4f4;}</style>
+    </head><body><h1>단어 제안함 (${suggestions.length}건)</h1>
+    <table><tr><th>시각</th><th>제안 단어</th><th>닉네임</th></tr>${rows}</table></body></html>`);
+});
 
 // ---------- 시간 설정 (TIME_SCALE로 테스트 시 배속 조절 가능) ----------
 const TIME_SCALE = Number(process.env.TIME_SCALE) || 1;
@@ -241,6 +277,22 @@ io.on('connection', (socket) => {
   });
 
   socket.on('cancel_waiting', () => leaveWaitingStates(socket));
+
+  // ---------- 단어 제안 (관리자만 확인, 게임과 무관하게 아무 때나 가능) ----------
+  socket.on('submit_suggestion', ({ word, nickname } = {}) => {
+    const cleanWord = String(word || '').trim().slice(0, 30);
+    if (!cleanWord) {
+      socket.emit('suggestion_rejected', { message: '단어를 입력해주세요.' });
+      return;
+    }
+    suggestions.push({
+      word: cleanWord,
+      nickname: cleanNickname(nickname),
+      at: Date.now(),
+    });
+    saveSuggestions();
+    socket.emit('suggestion_submitted');
+  });
 
   // ---------- 글자 선택 (탭 방식) ----------
   socket.on('submit_letter', (raw) => {

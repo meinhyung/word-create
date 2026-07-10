@@ -423,6 +423,7 @@
         <input type="text" id="join-code" placeholder="초대 코드" maxlength="4" autocomplete="off" />
         <button id="btn-join">참가</button>
       </div>
+      <button class="ghost" id="btn-suggest">단어 제안하기</button>
     </div>
     <p class="home-error" id="home-error"></p>
 
@@ -430,6 +431,19 @@
       <h2>최근 게임</h2>
       <div id="recent-list"></div>
     </div>
+  </section>
+
+  <!-- ========== 단어 제안 ========== -->
+  <section class="screen" id="screen-suggest">
+    <button class="ghost" id="btn-suggest-back">← 메인으로</button>
+    <div class="rules" style="margin-top:14px;">
+      사전에 없다고 나왔지만 실제로는 있는 단어라고 생각되면 알려주세요! 검토 후 반영할게요.
+    </div>
+    <div class="home-actions">
+      <input type="text" id="suggest-word" placeholder="사전에 추가됐으면 하는 단어" maxlength="30" autocomplete="off" />
+      <button id="btn-suggest-submit" class="accent">제안 보내기</button>
+    </div>
+    <p class="home-error" id="suggest-status"></p>
   </section>
 
   <!-- ========== 게임 기보 ========== -->
@@ -532,7 +546,7 @@
 <script>
   const socket = io();
   const $ = (id) => document.getElementById(id);
-  const screens = ['screen-home', 'screen-wait', 'screen-room', 'screen-game', 'screen-result', 'screen-kifu'];
+  const screens = ['screen-home', 'screen-wait', 'screen-room', 'screen-game', 'screen-result', 'screen-kifu', 'screen-suggest'];
   const WINS_NEEDED = 3;
   function showScreen(id) {
     screens.forEach((s) => $(s).classList.toggle('active', s === id));
@@ -619,6 +633,28 @@
     showScreen('screen-kifu');
   }
   $('btn-kifu-back').addEventListener('click', goHome);
+
+  // ---------- 단어 제안 ----------
+  $('btn-suggest').addEventListener('click', () => {
+    $('suggest-status').textContent = '';
+    showScreen('screen-suggest');
+  });
+  $('btn-suggest-back').addEventListener('click', goHome);
+  $('btn-suggest-submit').addEventListener('click', () => {
+    const word = $('suggest-word').value.trim();
+    if (!word) {
+      $('suggest-status').textContent = '단어를 입력해주세요.';
+      return;
+    }
+    socket.emit('submit_suggestion', { word, nickname: getNickname() });
+  });
+  socket.on('suggestion_submitted', () => {
+    $('suggest-status').textContent = '제안 감사해요! 검토 후 반영할게요.';
+    $('suggest-word').value = '';
+  });
+  socket.on('suggestion_rejected', ({ message }) => {
+    $('suggest-status').textContent = message;
+  });
 
   // ---------- 난도 토글 ----------
   function setupToggle(containerId, onSelect) {
